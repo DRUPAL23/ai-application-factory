@@ -1,9 +1,11 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from packages.generator.artifact import Artifact
 from packages.orchestrator.orchestrator import ApplicationOrchestrator
 
-app = FastAPI(title="AI Application Factory API", version="0.1.0")
+app = FastAPI(title="AI Application Factory API", version="0.2.0")
 orchestrator = ApplicationOrchestrator()
 
 
@@ -19,4 +21,22 @@ def health() -> dict[str, str]:
 
 @app.post("/api/v1/generate")
 def generate(request: GenerateRequest) -> dict:
-    return orchestrator.run(request.prompt, request.project_name)
+    result = orchestrator.run(request.prompt, request.project_name)
+    if result["status"] != "generated":
+        raise HTTPException(status_code=422, detail=result)
+    return result
+
+
+@app.post("/api/v1/generate/artifact")
+def generate_artifact(request: GenerateRequest) -> Response:
+    result = orchestrator.run(request.prompt, request.project_name)
+    if result["status"] != "generated":
+        raise HTTPException(status_code=422, detail=result)
+
+    artifact = Artifact(result["project"], result["files"])
+    filename = f"{request.project_name.replace('/', '-')}.zip"
+    return Response(
+        content=artifact.zip_bytes(),
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
