@@ -1,0 +1,6 @@
+{
+  "id": "fastapi-api",
+  "name": "FastAPI API",
+  "version": "0.1.0",
+  "description": "A minimal FastAPI service template"
+}
