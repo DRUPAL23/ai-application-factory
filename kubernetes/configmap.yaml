@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: factory-config
+  namespace: ai-application-factory
+data:
+  REDIS_URL: redis://redis:6379/0
+  API_PORT: "8000"
+  WEB_PORT: "3000"
