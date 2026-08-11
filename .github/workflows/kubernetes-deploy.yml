@@ -1,0 +1,65 @@
+name: Kubernetes Deploy
+
+on:
+  workflow_run:
+    workflows: ["Docker Build and Publish"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  NAMESPACE: ai-application-factory
+  API_IMAGE: ghcr.io/drupal23/ai-application-factory-api
+  WEB_IMAGE: ghcr.io/drupal23/ai-application-factory-web
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$KUBE_CONFIG" > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Validate manifests
+        run: kubectl apply --dry-run=server -k kubernetes/
+
+      - name: Apply infrastructure
+        run: kubectl apply -k kubernetes/
+
+      - name: Update immutable images
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          kubectl -n "$NAMESPACE" set image deployment/api api="$API_IMAGE:sha-${SHA:0:7}"
+          kubectl -n "$NAMESPACE" set image deployment/web web="$WEB_IMAGE:sha-${SHA:0:7}"
+
+      - name: Wait for API rollout
+        run: kubectl -n "$NAMESPACE" rollout status deployment/api --timeout=5m
+
+      - name: Wait for Web rollout
+        run: kubectl -n "$NAMESPACE" rollout status deployment/web --timeout=5m
+
+      - name: Verify services
+        run: |
+          kubectl -n "$NAMESPACE" get deployments,services,pods
+
+      - name: Roll back on failure
+        if: failure()
+        run: |
+          kubectl -n "$NAMESPACE" rollout undo deployment/api || true
+          kubectl -n "$NAMESPACE" rollout undo deployment/web || true
