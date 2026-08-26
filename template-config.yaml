@@ -1,0 +1,11 @@
+# Application Template Configuration
+# Replace these values when creating a project from this template.
+project_name: my-app
+runtime: python
+api: fastapi
+test_framework: pytest
+container: docker
+deployment:
+  local: docker-compose
+  production: kubernetes
+ci: github-actions
